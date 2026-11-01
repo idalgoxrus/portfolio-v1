@@ -1,3 +1,12 @@
+## Portfolio Presentation
+
+[Download Portfolio Presentation (PPTX)](./AI-Automation-Portfolio-Presentation-RU-EN-v4.pptx)
+
+---
+
+
+
+
 # AI & Automation Developer Portfolio
 
 **Python · Telegram Bots · WhatsApp Automation · n8n · AI Integrations**
@@ -6,7 +15,6 @@
 
 A practical portfolio of projects covering customer support automation, lead capture, messaging integrations, and AI-assisted customer conversations.
 
----
 
 ## 🇷🇺 Русская версия
 
@@ -37,7 +45,6 @@ A practical portfolio of projects covering customer support automation, lead cap
 
 Публичная версия не должна содержать действующие токены, API-ключи, пароли, `.env` с реальными значениями, личные базы данных, приватные журналы или данные клиентов. Примеры конфигурации используют placeholders. Экспорты workflow предназначены для ознакомления и требуют настройки в отдельном тестовом окружении.
 
----
 
 ## 🇬🇧 English Version
 
@@ -68,6 +75,5 @@ The documentation distinguishes automated tests from real end-to-end checks. Res
 
 The public version must not contain live tokens, API keys, passwords, real `.env` values, private databases, internal logs, or customer data. Configuration examples use placeholders. Workflow exports are provided for review and require configuration in a separate test environment.
 
----
 
 *Project documentation is available in Russian and English.*
