@@ -1,0 +1,286 @@
+{
+  "name": "Lead Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "4d5e6f70-0004-4000-8000-000000000001",
+      "name": "Schedule: ежедневно 10:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.LEAD_API_URL }}/follow-ups",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Admin-Token",
+              "value": "={{ $env.ADMIN_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "4d5e6f70-0004-4000-8000-000000000002",
+      "name": "HTTP: получить лиды для follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -220,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "status-gte-200",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "status-lt-300",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 300,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4d5e6f70-0004-4000-8000-000000000009",
+      "name": "IF: API ответил успешно",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-items",
+              "leftValue": "={{ $json.body.count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4d5e6f70-0004-4000-8000-000000000003",
+      "name": "IF: есть лиды на напоминание",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Собрать сообщение для менеджера из списка «зависших» лидов.\n// Telegram ограничивает сообщение ~4096 символами, поэтому длинный список\n// разбивается на несколько частей: порядок лидов сохраняется, ни один не теряется.\nconst SAFE_LIMIT = 3800;\nconst items = ($json.body && $json.body.items) || [];\nif (items.length === 0) { return []; }\n\nconst emoji = { stale: '🔴', remind: '🟡', unresolved: '⚠️' };\nconst lines = items.map((item) => {\n  const mark = emoji[item.bucket] || '•';\n  return `${mark} #${item.lead_id} ${item.full_name} ${item.phone} — ${item.bucket}, ${item.age_hours} ч, статус: ${item.status}`;\n});\n\nconst header = `Follow-up: ${items.length} лидов требуют внимания`;\nconst budget = SAFE_LIMIT - header.length - 1;\n\nconst parts = [];\nlet current = [];\nlet length = 0;\n\nfor (const line of lines) {\n  const projected = length + (current.length ? 1 : 0) + line.length;\n  if (current.length && projected > budget) {\n    parts.push(current);\n    current = [];\n    length = 0;\n  }\n  current.push(line);\n  length += (current.length > 1 ? 1 : 0) + line.length;\n}\nif (current.length) { parts.push(current); }\n\nreturn parts.map((part, index) => ({\n  json: {\n    count: items.length,\n    part: index + 1,\n    parts_total: parts.length,\n    text: `${header}\\n${part.join('\\n')}`,\n  },\n}));"
+      },
+      "id": "4d5e6f70-0004-4000-8000-000000000004",
+      "name": "Code: собрать сообщение",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "REPLACE_WITH_YOUR_VALUE",
+        "text": "={{ $json.text }}",
+        "additionalFields": {}
+      },
+      "id": "4d5e6f70-0004-4000-8000-000000000005",
+      "name": "Telegram: напоминание менеджеру",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        740,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4d5e6f70-0004-4000-8000-000000000006",
+      "name": "NoOp: напоминаний нет",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        500,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=Lead Reminders: API follow-up недоступен или вернул ошибку (HTTP {{ $json.statusCode || 'сеть' }}). Напоминания НЕ отправлены — нужна проверка сервиса Project #02."
+      },
+      "id": "4d5e6f70-0004-4000-8000-000000000008",
+      "name": "Stop And Error: API недоступен",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Lead Reminders (этап MVP)\n\n**Триггер:** cron `0 10 * * *` (ежедневно 10:00, таймзона инстанса n8n).\n**Вход:** `GET {{$env.LEAD_API_URL}}/follow-ups` (эндпоинт FastAPI, `app/main.py`).\n\n### Как решается, что напоминать\nВозраст лида = `now - created_at`:\n- `failed` → **unresolved** (не ушёл в n8n, нужен ручной разбор) — сразу;\n- меньше `REMIND_AFTER_HOURS` (24) → пропускаем;\n- от 24 до `STALE_AFTER_HOURS` (72) → **remind**;\n- больше 72 → **stale**.\n\nПороги и логика — в `app/services/followup.py` (там же тесты), здесь только доставка.\n\n### Устойчивость вызова API\nHTTP-узел: `timeout` 15 с (а не 5 минут по умолчанию), `neverError` + `fullResponse`,\n`retryOnFail` до 3 попыток с паузой 2 с, `onError` → отдельный выход.\n\nТранспортные ошибки (API не поднялся после перезагрузки, таймаут, connection refused)\nретраятся; 4xx намеренно НЕ ретраятся, потому что при `neverError` код ответа\nвозвращается как данные и проверяется узлом `IF: API ответил успешно`.\n\nЕсли API недоступен или ответил не-2xx — выполнение завершается ошибкой\n(`Stop And Error`), а НЕ тихим «0 лидов»: ложное сообщение не отправляется,\nошибка не считается успешным прогоном.\n\n### Длина сообщения\nCode-узел режет вывод на части по ~3800 символов (лимит Telegram 4096),\nзаголовок повторяется в каждой части, порядок лидов сохраняется.\nКаждая часть — отдельный item, поэтому Telegram-узел шлёт её своим сообщением.\n\n### Выход\nСообщение(я) в Telegram менеджеру (`TELEGRAM_ADMIN_CHAT_ID`).\nПри 0 лидов отправки нет: срабатывает ветка `NoOp`.\n\nСложная очередь не нужна: n8n сам вызывает воркфлоу по расписанию,\nа состояние лидов уже лежит в SQLite.\n\nСекретов в файле нет: `$env.LEAD_API_URL`, `$env.ADMIN_API_TOKEN`, `$env.TELEGRAM_ADMIN_CHAT_ID`.",
+        "height": 520,
+        "width": 560,
+        "color": 6
+      },
+      "id": "4d5e6f70-0004-4000-8000-000000000007",
+      "name": "Sticky Note: логика напоминаний",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule: ежедневно 10:00": {
+      "main": [
+        [
+          {
+            "node": "HTTP: получить лиды для follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: получить лиды для follow-up": {
+      "main": [
+        [
+          {
+            "node": "IF: API ответил успешно",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop And Error: API недоступен",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: API ответил успешно": {
+      "main": [
+        [
+          {
+            "node": "IF: есть лиды на напоминание",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop And Error: API недоступен",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: есть лиды на напоминание": {
+      "main": [
+        [
+          {
+            "node": "Code: собрать сообщение",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp: напоминаний нет",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: собрать сообщение": {
+      "main": [
+        [
+          {
+            "node": "Telegram: напоминание менеджеру",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

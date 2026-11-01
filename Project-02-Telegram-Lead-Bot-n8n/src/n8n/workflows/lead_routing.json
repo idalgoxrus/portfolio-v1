@@ -1,0 +1,121 @@
+{
+  "name": "Lead Routing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-routing",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "3c4d5e6f-0003-4000-8000-000000000001",
+      "name": "Webhook: Lead Routing",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        0
+      ],
+      "webhookId": "telegram-lead-routing"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Простое правило маршрутизации, без AI-классификации.\n// Зеркало app/services/routing.py — при изменении правил правьте оба места.\nconst lead = $json.body ?? $json;\n\nconst source = (lead.source || 'telegram_bot').trim();\nconst comment = (lead.comment || '').trim();\nconst keywords = ['срочно', 'asap', 'сегодня', 'завтра', 'консультация'];\n\nlet route, priority, reason, tags;\n\nif (source && source !== 'telegram_bot') {\n  // Лид пришёл не из основной анкеты → отдельный контур поддержки.\n  route = 'support';\n  priority = 'normal';\n  reason = `source=${source}`;\n  tags = [source];\n} else {\n  const lowered = comment.toLowerCase();\n  const matched = keywords.find((word) => lowered.includes(word));\n  if (matched) {\n    route = 'priority';\n    priority = 'high';\n    reason = `keyword:${matched}`;\n    tags = ['hot', matched];\n  } else if (comment) {\n    route = 'sales';\n    priority = 'normal';\n    reason = 'comment_present';\n    tags = ['with_comment'];\n  } else {\n    route = 'general';\n    priority = 'normal';\n    reason = 'default';\n    tags = [];\n  }\n}\n\nreturn [{\n  json: {\n    lead_id: lead.id || null,\n    full_name: lead.full_name || '',\n    phone: lead.phone || '',\n    route,\n    priority,\n    reason,\n    tags,\n    created_at: lead.created_at || null,\n  },\n}];"
+      },
+      "id": "3c4d5e6f-0003-4000-8000-000000000002",
+      "name": "Code: Маршрутизировать лид",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "REPLACE_WITH_YOUR_VALUE",
+        "text": "=Маршрут лида\nОчередь: {{ $json.route }}\nПриоритет: {{ $json.priority }}\nПричина: {{ $json.reason }}\nИмя: {{ $json.full_name }}\nТелефон: {{ $json.phone }}",
+        "additionalFields": {}
+      },
+      "id": "3c4d5e6f-0003-4000-8000-000000000003",
+      "name": "Telegram: уведомить менеджера о маршруте",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "disabled": true,
+      "position": [
+        80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true, \"route\": $json.route, \"priority\": $json.priority, \"reason\": $json.reason, \"tags\": $json.tags } }}",
+        "options": {}
+      },
+      "id": "3c4d5e6f-0003-4000-8000-000000000004",
+      "name": "Respond: маршрут определён",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Lead Routing (этап MVP)\n\n**Вход:** `POST /webhook/lead-routing`, тело лида.\n**Выход:** `{ ok, route, priority, reason, tags }`.\n\n### Правило (первое сработавшее выигрывает)\n1. `source != telegram_bot` → **support**, normal\n2. ключевое слово («срочно», «asap», «сегодня», «завтра», «консультация») → **priority**, high\n3. комментарий заполнен → **sales**, normal\n4. иначе → **general**, normal\n\nПриоритет `high` = менеджер должен взять лид первым.\n\n### Единый источник правил\nПравило также реализовано в `app/services/routing.py` (используется ботом/API). При правке меняйте оба места — тест `tests/test_n8n_workflows.py` сверяет, что оба содержат один и тот же набор ключевых слов.\n\nСекретов в файле нет: только `$env.TELEGRAM_ADMIN_CHAT_ID`.",
+        "height": 480,
+        "width": 560,
+        "color": 3
+      },
+      "id": "3c4d5e6f-0003-4000-8000-000000000005",
+      "name": "Sticky Note: правило маршрутизации",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -440,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Lead Routing": {
+      "main": [
+        [
+          {
+            "node": "Code: Маршрутизировать лид",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Маршрутизировать лид": {
+      "main": [
+        [
+          {
+            "node": "Telegram: уведомить менеджера о маршруте",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: уведомить менеджера о маршруте": {
+      "main": [
+        [
+          {
+            "node": "Respond: маршрут определён",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

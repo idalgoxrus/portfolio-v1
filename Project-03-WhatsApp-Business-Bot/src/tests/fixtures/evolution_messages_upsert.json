@@ -1,0 +1,166 @@
+{
+  "_comment": "Evolution API v2 messages.upsert webhook payload fixtures. ALL DATA IS FICTIONAL. Phone numbers use the reserved example range with an obvious 555599 marker; no real WhatsApp account, number, or credential is referenced anywhere in this file. Structure mirrors the documented Evolution API v2 envelope {event, instance, data:{key, pushName, message, messageType}}. The real dispatcher additionally injects destination, date_time, sender, server_url and apikey fields; those are intentionally omitted so no key ever lives in version control.",
+  "A_text_message": {
+    "event": "messages.upsert",
+    "instance": "demo",
+    "data": {
+      "key": {
+        "remoteJid": "555599000001@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0A1B2C3D4E5F6000001"
+      },
+      "pushName": "Fixture User A",
+      "message": {
+        "conversation": "Привет"
+      },
+      "messageType": "conversation"
+    }
+  },
+
+  "B_nested_message": {
+    "event": "messages.upsert",
+    "instance": "demo",
+    "data": {
+      "key": {
+        "remoteJid": "555599000002@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0A1B2C3D4E5F6000002"
+      },
+      "pushName": "Fixture User B",
+      "message": {
+        "extendedTextMessage": {
+          "text": "help",
+          "description": "nested extended text wrapper"
+        }
+      },
+      "messageType": "extendedTextMessage"
+    }
+  },
+
+  "C_unknown_event": {
+    "event": "connection.update",
+    "instance": "demo",
+    "data": {
+      "state": "open",
+      "statusReason": 200
+    }
+  },
+
+  "D_malformed": {
+    "event": "messages.upsert",
+    "instance": "demo",
+    "data": {
+      "key": {
+        "remoteJid": "555599000003@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0A1B2C3D4E5F6000003"
+      },
+      "pushName": "Fixture User D",
+      "message": 12345,
+      "messageType": {"unexpected": ["shape", 42, null]},
+      "unexpected": [null, true, 12345, {"deep": {"deeper": {"x": [1, 2]}}}]
+    }
+  },
+
+  "E_from_me": {
+    "event": "messages.upsert",
+    "instance": "demo",
+    "data": {
+      "key": {
+        "remoteJid": "555599000004@s.whatsapp.net",
+        "fromMe": true,
+        "id": "3EB0A1B2C3D4E5F6000004"
+      },
+      "pushName": "Bot Account",
+      "message": {
+        "conversation": "Привет"
+      },
+      "messageType": "conversation"
+    }
+  },
+
+  "F_group_message": {
+    "event": "messages.upsert",
+    "instance": "demo",
+    "data": {
+      "key": {
+        "remoteJid": "555599998888-1600000000@g.us",
+        "fromMe": false,
+        "id": "3EB0A1B2C3D4E5F6000005",
+        "participant": "555599000005@s.whatsapp.net"
+      },
+      "pushName": "Fixture User F",
+      "message": {
+        "conversation": "помощь"
+      },
+      "messageType": "conversation"
+    }
+  },
+
+  "G_empty_message": {
+    "event": "messages.upsert",
+    "instance": "demo",
+    "data": {
+      "key": {
+        "remoteJid": "555599000006@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0A1B2C3D4E5F6000006"
+      },
+      "pushName": "Fixture User G",
+      "message": {},
+      "messageType": "unknown"
+    }
+  },
+
+  "H_no_sender": {
+    "event": "messages.upsert",
+    "instance": "demo",
+    "data": {
+      "key": {
+        "fromMe": false,
+        "id": "3EB0A1B2C3D4E5F6000007"
+      },
+      "pushName": "Fixture User H",
+      "message": {
+        "conversation": "привет"
+      },
+      "messageType": "conversation"
+    }
+  },
+
+  "I_uppercase_event": {
+    "event": "MESSAGES_UPSERT",
+    "instance": "demo",
+    "data": {
+      "key": {
+        "remoteJid": "555599000008@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0A1B2C3D4E5F6000008"
+      },
+      "pushName": "Fixture User I",
+      "message": {
+        "conversation": "hello"
+      },
+      "messageType": "conversation"
+    }
+  },
+
+  "J_data_as_list": {
+    "event": "messages.upsert",
+    "instance": "demo",
+    "data": [
+      {
+        "key": {
+          "remoteJid": "555599000009@s.whatsapp.net",
+          "fromMe": false,
+          "id": "3EB0A1B2C3D4E5F6000009"
+        },
+        "pushName": "Fixture User J",
+        "message": {
+          "conversation": "часы"
+        },
+        "messageType": "conversation"
+      }
+    ]
+  }
+}

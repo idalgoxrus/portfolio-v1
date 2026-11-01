@@ -1,0 +1,306 @@
+{
+  "name": "Telegram Lead Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telegram-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000001",
+      "name": "Webhook: Lead Intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        0
+      ],
+      "webhookId": "telegram-lead-intake"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-phone",
+              "leftValue": "={{ $json.body.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000002",
+      "name": "IF: телефон заполнен",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f-full-name",
+              "name": "full_name",
+              "value": "={{ $json.body.full_name }}",
+              "type": "string"
+            },
+            {
+              "id": "f-phone",
+              "name": "phone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "f-comment",
+              "name": "comment",
+              "value": "={{ $json.body.comment }}",
+              "type": "string"
+            },
+            {
+              "id": "f-source",
+              "name": "source",
+              "value": "={{ $json.body.source }}",
+              "type": "string"
+            },
+            {
+              "id": "f-created-at",
+              "name": "created_at",
+              "value": "={{ $json.body.created_at }}",
+              "type": "string"
+            },
+            {
+              "id": "f-received-at",
+              "name": "received_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000003",
+      "name": "Set: нормализация лида",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/lead-routing",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 3000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000009",
+      "name": "HTTP: Lead Routing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Best-effort обогащение лида маршрутом: сбой routing не должен ломать приём лида.\nconst response = $json ?? {};\n\n// Исходный лид берём из Set по pairedItem: при continueRegularOutput поля лида\n// не попадают в $json узла HTTP (там тело ответа либо error).\nconst lead = $('Set: нормализация лида').item.json;\n\nconst routed = response.ok === true && typeof response.route === 'string' && response.route.length > 0;\n\nreturn {\n  json: {\n    ...lead,\n    route: routed ? response.route : 'unknown',\n    priority: routed ? (response.priority || 'normal') : 'normal',\n    reason: routed ? (response.reason || 'routing_unavailable') : 'routing_unavailable',\n    tags: routed && Array.isArray(response.tags) ? response.tags : [],\n  },\n};\n"
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000010",
+      "name": "Code: обогатить лид маршрутом",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "REPLACE_WITH_YOUR_VALUE",
+        "text": "=Новый лид!\nИмя: {{ $json.full_name }}\nТелефон: {{ $json.phone }}\nКомментарий: {{ $json.comment || '—' }}\nИсточник: {{ $json.source }}\nОчередь: {{ $json.route }}\nПриоритет: {{ $json.priority }}",
+        "additionalFields": {}
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000004",
+      "name": "Telegram: уведомить менеджера",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        340,
+        -160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1a2b3c4d-0001-4000-8000-000000000005",
+      "name": "Заглушка: CRM / Google Sheets",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        340,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true, \"status\": \"accepted\" } }}",
+        "options": {}
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000006",
+      "name": "Respond: лид принят",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        600,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": false, \"error\": \"phone is required\" } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000007",
+      "name": "Respond: ошибка валидации",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        60,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Telegram Lead Intake\n1. Webhook принимает POST от бота (path: telegram-lead).\n2. IF проверяет обязательное поле phone.\n3. Set приводит поля к единому виду.\n4. Telegram уведомляет менеджера, «Заглушка» — место для CRM / Google Sheets.\n5. Respond возвращает ok:true, чтобы бот отметил лид как sent.\n\nПеред включением: задайте переменную окружения TELEGRAM_ADMIN_CHAT_ID и credential для Telegram-узла.\n\nМаршрутизация (best-effort): HTTP POST /webhook/lead-routing → Code добавляет route/priority/reason/tags. Если routing недоступен (500, timeout, отказ соединения) — лид сохраняется, поля становятся unknown/normal/routing_unavailable/[].",
+        "height": 360,
+        "width": 440,
+        "color": 4
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000008",
+      "name": "Sticky Note: инструкция",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Lead Intake": {
+      "main": [
+        [
+          {
+            "node": "IF: телефон заполнен",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: телефон заполнен": {
+      "main": [
+        [
+          {
+            "node": "Set: нормализация лида",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: ошибка валидации",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: нормализация лида": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Lead Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Lead Routing": {
+      "main": [
+        [
+          {
+            "node": "Code: обогатить лид маршрутом",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: обогатить лид маршрутом": {
+      "main": [
+        [
+          {
+            "node": "Telegram: уведомить менеджера",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Заглушка: CRM / Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: уведомить менеджера": {
+      "main": [
+        [
+          {
+            "node": "Respond: лид принят",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

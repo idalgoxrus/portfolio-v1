@@ -1,0 +1,6 @@
+PUBLIC PORTFOLIO CONTENT
+This archive contains selected public-facing documentation, screenshots, source files,
+tests, safe configuration examples, and redacted workflow templates.
+
+Excluded intentionally: live credentials, .env files, databases, logs, QR pairing images,
+Git metadata/history, private audit notes, customer data, and local runtime artifacts.

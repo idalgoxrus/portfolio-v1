@@ -1,0 +1,2042 @@
+{
+  "name": "Project04_AI_Sales_Assistant_FINAL_v1.0_2026-10-27.json",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# 🤖 WhatsApp AI Sales Assistant — Evolution API + Google Sheets CRM\n\n**Who's it for**\nService businesses, agencies, and SMBs that get inbound WhatsApp messages and want a\n24/7 AI assistant without a third-party chatbot platform.\n\n## What it does\nTurns your WhatsApp Business number into an AI-powered customer assistant that handles\n**text + voice messages**, filters out automatic replies from other bots, looks up leads in\nyour **Google Sheets CRM**, generates contextual responses with **DeepSeek**, escalates to\n**Telegram** when human attention is needed, and keeps your CRM updated automatically.\n\n## How it works\n1. **Receive** - the Evolution API webhook receives the WhatsApp message\n2. **Filter** - voice messages are transcribed (Whisper); auto-replies are silently discarded\n3. **Lookup** - the lead is found in the `Leads` tab (or flagged as new). If `bot_status` is\n   `Paused`, the workflow stops and lets a human take over\n4. **Generate** - DeepSeek builds a contextual response from your knowledge base + lead context\n5. **Send & Log** - the reply goes out via Evolution API; the exchange is logged to\n   `Conversation_Log`\n6. **Escalate** - when a human is needed the contact's `bot_status` becomes `Paused` and the\n   team is alerted on Telegram\n\n## Setup checklist\n- ✅ Evolution API instance (URL + API key)\n- ✅ DeepSeek API key\n- ✅ OpenAI API key (Whisper, optional for voice)\n- ✅ Google Sheets OAuth (knowledge base + Leads + Conversation_Log)\n- ✅ Telegram Bot token + Chat ID\n\n## Notes\n- The CRM lives in the Google Sheet **Project 04 - AI Sales Assistant - CRM**\n  (`Business_Info`, `Products`, `FAQs`, `Leads`, `Conversation_Log`).\n- The `Generate Response` system prompt is prefixed with `=` so n8n evaluates its\n  double-curly-brace placeholders. Without that prefix the raw template text is sent to the\n  model and can be copied into customer-visible replies.\n",
+        "height": 1000,
+        "width": 944
+      },
+      "id": "68363629-f1c1-4f56-b449-99ef1c680ebe",
+      "name": "Main",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2944,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📥 STEP 1 — Receive & Filter Messages\n\nReceives WhatsApp messages from Evolution API, normalizes the payload, transcribes voice\nnotes, and filters out automatic replies (out-of-office bots, delivery confirmations).\n\n**Evolution webhook setup:**\n- URL: `https://YOUR-N8N-DOMAIN/webhook/<this workflow's webhook path>`\n- Events: MESSAGES_UPSERT\n- webhookByEvents: OFF\n- Webhook Base64: ON (required for voice support)\n\nIf you don't need voice support, disable the audio branch.\n\n> DEV note: this workflow currently uses a random webhook path and no webhook\n> authentication. Add authentication (and restrict network exposure) before using this\n> instance outside localhost.\n",
+        "height": 280,
+        "width": 1856,
+        "color": 5
+      },
+      "id": "439ce431-2d23-4f5a-92cc-8b931bb916ef",
+      "name": "Section 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1920,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🗃️ STEP 2 — Lookup Lead in CRM\n\nChecks the `Leads` tab of the Google Sheets CRM for the incoming phone number:\n- **Known lead** → reads bot status + lead context\n- **Unknown lead** → flagged for creation later\n- If `bot_status` = \"Paused\", the workflow stops silently, letting you take over manually\n\nThe lookup is a **filter on the `phone` column of the `Leads` sheet**. Keep the stored values\nin one consistent format, otherwise a lookup can miss an existing lead. The workflow's own\nmatching step (`Normalize Phone and Look Match1`) strips spaces, `+`, dashes and brackets, but\nthe Sheets filter runs *before* that and compares values exactly.\n",
+        "height": 424,
+        "width": 592,
+        "color": 4
+      },
+      "id": "6864365e-a5c6-4fee-ae8d-64a42c9885b3",
+      "name": "Section 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🧠 STEP 3 — AI Processing\n\nThe AI pipeline:\n1. **Information Extractor** detects intent, sentiment, urgency and whether a human is needed\n2. **Knowledge Base** (Google Sheets) provides business info, products and FAQs\n3. **Build Context** combines all of this with the lead context from the `Leads` tab\n4. **Wait 10s** to avoid replying mid-typing\n5. **Generate Response** uses DeepSeek with conversation memory (last 10 messages)\n6. **Format Cleaner** strips markdown for clean WhatsApp rendering\n\n📚 Knowledge base tabs required: `Business_Info`, `Products`, `FAQs`.\n\nCustomize the **system prompt** in `Generate Response` to match your business voice.\nKeep the leading `=` on the prompt field: it is what makes n8n evaluate the double-curly\nplaceholders. Every `context.*` value the prompt references must be produced by\n`Build Context`, otherwise the placeholder text reaches the model verbatim.\n",
+        "height": 328,
+        "width": 1696,
+        "color": 7
+      },
+      "id": "191f1a87-b511-46d5-8482-0b6c50b1d912",
+      "name": "Section 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        944,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📤 STEP 4 — Send Reply & Log\n\nSends the AI response via Evolution API and logs the full conversation to the\n`Conversation_Log` tab of the CRM sheet.\n\n**Send WhatsApp Reply node:**\n- URL: `https://YOUR-EVOLUTION-DOMAIN/message/sendText/YOUR-INSTANCE-NAME`\n- Header `apikey`: your Evolution API instance key\n\nThe instance name and the destination number are read from the incoming webhook payload.\n\n> The `apikey` header currently holds a DEV placeholder value, not a real key. See the\n> unresolved-items list for the credential migration that must be done by hand.\n",
+        "height": 312,
+        "width": 560,
+        "color": 6
+      },
+      "id": "e5108e30-401d-4ae3-bb99-f94a89e10779",
+      "name": "Section 4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🚨 STEP 5 — Handoff & CRM Update\n\nWhen the AI detects buying intent, frustration, or a question it can't answer:\n1. Sends a **Telegram alert** with the full conversation context\n2. Sets `bot_status = Paused` on the lead row (the bot then stops auto-replying)\n3. Updates the lead: `last_contact`, `status` (Positive/Negative/Neutral), `intent`, `language`\n\nIf the contact is new, a lead **row is appended** to the `Leads` tab with the phone number and\n`source = WhatsApp`.\n\n**To resume the bot for a paused contact:** set `bot_status` back to `Active` in the sheet.\n\n**Escalation order:** `Alert Owner?1` is fed only by `Log Conversation1`, so the Telegram alert\nand the CRM update both depend on the logging step succeeding. This dependency is a known open\nitem, not an intended design.\n",
+        "height": 312,
+        "width": 1584,
+        "color": 2
+      },
+      "id": "f7ff477f-4f32-4763-86c9-9db9fe98008b",
+      "name": "Section 5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3296,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bfa4cbe0-91ce-4b04-943d-d542f1112a28",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "806783f9-4c66-4817-866a-792ed551e4f7",
+      "name": "Evolution Webhook1",
+      "webhookId": "bfa4cbe0-91ce-4b04-943d-d542f1112a28",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2096,
+        480
+      ],
+      "notes": "SETUP: In Evolution Manager → your instance → Webhook\nURL: https://YOUR-N8N-DOMAIN/webhook/evo-inbound\n\nEnable events: MESSAGES_UPSERT, CONNECTION_UPDATE, QRCODE_UPDATED\nwebhookByEvents: OFF ✅ (keeps URL path fixed — CRITICAL)\nWebhook Base64: ON ✅ (required for voice message support)"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n // ============================================\n // EVOLUTION API PAYLOAD NORMALIZER\n // Project #4 — preserve raw message for voice retrieval\n // ============================================\n\nconst root = items[0].json || {};\nconst payload = root.body || root;\n\nconst event = String(payload.event || '').toLowerCase();\n\nif (event !== 'messages.upsert') {\n  return [{\n    json: {\n      skip: true,\n      reason: 'not a message event',\n      event\n    }\n  }];\n}\n\nconst data = payload.data || {};\nconst key = data.key || {};\n\n// Ignore messages sent by the bot itself\nif (key.fromMe === true) {\n  return [{\n    json: {\n      skip: true,\n      reason: 'fromMe message'\n    }\n  }];\n}\n\nconst remoteJid = key.remoteJid || '';\n\n// Ignore group messages\nif (remoteJid.includes('@g.us')) {\n  return [{\n    json: {\n      skip: true,\n      reason: 'group message'\n    }\n  }];\n}\n\nconst phone = remoteJid.replace(\n  /@s\\.whatsapp\\.net|@c\\.us|@g\\.us/g,\n  ''\n);\n\nconst senderName = data.pushName || 'Customer';\nconst messageType = data.messageType || 'conversation';\nconst instanceName = payload.instance || 'project4-test';\n\nconst isAudio =\n  messageType === 'audioMessage' ||\n  messageType === 'audio';\n\nconst isText =\n  messageType === 'conversation' ||\n  messageType === 'extendedTextMessage';\n\nlet text = '';\n\nif (isText) {\n  text =\n    data.message?.conversation ||\n    data.message?.extendedTextMessage?.text ||\n    '';\n}\n\n// Base64 may be absent from the webhook.\n// Preserve the complete message so the media can be retrieved separately.\nconst audioBase64 = isAudio\n  ? (\n      data.base64 ||\n      data.media ||\n      data.message?.base64 ||\n      ''\n    )\n  : '';\n\nconst messageId = key.id || '';\n\nconst timestamp = data.messageTimestamp\n  ? new Date(Number(data.messageTimestamp) * 1000).toISOString()\n  : '';\n\nreturn [{\n  json: {\n    skip: false,\n    phone,\n    sender_name: senderName,\n    message_type: isAudio ? 'voice' : 'text',\n    text: text || (isAudio ? '[voice message]' : ''),\n    audio_base64: audioBase64,\n    message_id: messageId,\n    timestamp,\n    instance_name: instanceName,\n    raw_type: messageType,\n\n    // Preserve source data for the media retrieval request\n    message_key: key,\n    raw_message: data.message || {},\n    raw_data: data\n  }\n}];\n"
+      },
+      "id": "7d2da525-d04b-4597-b42a-1834414333b4",
+      "name": "Detect Message Type1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1904,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'ok', reason: $('Detect Message Type1').item.json.reason } }}",
+        "options": {}
+      },
+      "id": "591083d2-01dc-4e35-a457-232d1b9a4ace",
+      "name": "Respond OK (skip)3",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1200,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "voice-check",
+              "leftValue": "={{ $('Detect Message Type1').item.json.message_type }}",
+              "operator": {
+                "operation": "equals",
+                "type": "string"
+              },
+              "rightValue": "voice"
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      },
+      "id": "3c9e8514-e507-4048-8983-d05ffc106f44",
+      "name": "Is Voice?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1360,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// PREPARE AUDIO FOR OPENAI TRANSCRIPTION\n// Project #4 — Evolution API media retrieval\n// ============================================\n\n// Original message from Detect Message Type1\nconst original = $('Detect Message Type1').item.json;\n\n// Base64 response from HTTP Request\nconst response = items[0].json;\n\nconst base64Audio =\n  response.base64 ||\n  response.data?.base64 ||\n  response.media ||\n  response.data?.media ||\n  '';\n\nif (!base64Audio) {\n  throw new Error(\n    'Base64 audio not found in HTTP Request response. Check the response fields.'\n  );\n}\n\n// Remove data URL prefix if present\nconst cleanBase64 = base64Audio.replace(\n  /^data:audio\\/[^;]+;base64,/,\n  ''\n);\n\n// Detect MIME type when available\nconst mimeType =\n  response.mimetype ||\n  response.mimeType ||\n  response.data?.mimetype ||\n  response.data?.mimeType ||\n  'audio/ogg';\n\nconst extension = mimeType.includes('mpeg')\n  ? 'mp3'\n  : mimeType.includes('mp4')\n    ? 'mp4'\n    : mimeType.includes('wav')\n      ? 'wav'\n      : 'ogg';\n\nconst buffer = Buffer.from(cleanBase64, 'base64');\n\nreturn [{\n  json: {\n    ...original,\n    audio_base64: cleanBase64,\n    text: original.text || '[voice message]'\n  },\n  binary: {\n    data: {\n      data: buffer.toString('base64'),\n      mimeType,\n      fileName: `audio.${extension}`\n    }\n  }\n}];"
+      },
+      "id": "b0508b64-b9a6-476f-9f69-ccc5e278a3e9",
+      "name": "Prepare Audio Binary1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        512
+      ],
+      "notes": "Convierte el base64 del audio a binario para que OpenAI Whisper pueda transcribirlo.\nNo necesita llamada HTTP extra — el audio ya vino en el webhook payload."
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "54eab79d-6e06-45ee-ac91-0dcdcd1c01ea",
+      "name": "Transcribe Audio1",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "position": [
+        -688,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $('Normalize Phone and Look Match1').item.json.text }}",
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n    \"intent\": {\n      \"type\": \"string\",\n      \"description\": \"Main intent of the message. Use: interested, not_interested, asking_question, wrong_person, inquiry_price, inquiry_product, inquiry_schedule, inquiry_availability, request_quote, request_contact, greeting, other\"\n    },\n    \"reply_sentiment\": {\n      \"type\": \"string\",\n      \"description\": \"Sentiment toward a B2B outreach offer. 'positive': interested, curious, open to a call, asking for more info. 'negative': not interested, asks to stop, wrong person, dismissive. 'neutral': unclear or cannot be determined. Use 'neutral' for new inbound contacts who were not previously contacted.\"\n    },\n    \"product_mentioned\": {\n      \"type\": \"string\",\n      \"description\": \"Product or service mentioned by the person, if any. Empty if none.\"\n    },\n    \"urgency\": {\n      \"type\": \"string\",\n      \"description\": \"Urgency level: high, medium, low, none\"\n    },\n    \"needs_human\": {\n      \"type\": \"boolean\",\n      \"description\": \"Set true ONLY when the customer explicitly requests a human, asks to speak with a manager or specialist, expresses a complaint or serious frustration, or explicitly requests a quote or price negotiation that requires human follow-up. For ordinary questions about services, products, features, availability, schedules, or general pricing information, set false unless one of the explicit human-follow-up conditions above applies. General curiosity or buying interest alone is NOT sufficient. For a simple greeting or general inquiry about services, set false.\"\n    },\n    \"language\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"ru\",\n        \"en\",\n        \"lv\",\n        \"other\"\n      ],\n      \"description\": \"Language the customer wrote their message in. Use 'ru' for Russian, 'en' for English, 'lv' for Latvian, 'other' for any other language. Detect it ONLY from the customer's message text, never from the business knowledge base and never from the language of your own reply.\"\n    }\n  },\n  \"required\": [\n    \"intent\",\n    \"reply_sentiment\",\n    \"needs_human\"\n  ]\n}",
+        "options": {}
+      },
+      "id": "517955df-2aca-44b7-9a03-8e0b50d6480d",
+      "name": "Information Extractor1",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        736,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "REPLACE_WITH_YOUR_VALUE",
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Business_Info",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=0",
+          "mode": "list",
+          "value": "gid=0"
+        },
+        "options": {}
+      },
+      "id": "fb74dc30-2589-4f36-adde-cbd2227fdb6a",
+      "name": "Read Business Info1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1072,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "REPLACE_WITH_YOUR_VALUE",
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Products",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=1658408837",
+          "mode": "list",
+          "value": 1658408837
+        },
+        "options": {}
+      },
+      "id": "6cc15c9d-2707-4a99-a756-642297e27cfd",
+      "name": "Read Products1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1296,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "REPLACE_WITH_YOUR_VALUE",
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "FAQs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=1185361406",
+          "mode": "list",
+          "value": 1185361406
+        },
+        "options": {}
+      },
+      "id": "9a3168a7-e2e3-4e03-a32c-e514917316d0",
+      "name": "Read FAQs1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1520,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n // ============================================\n// BUILD CONTEXT FOR AI AGENT\n// Pulls: message data, business KB, lead context from Google Sheets\n// ============================================\n\nconst userMessage = $('Code in JavaScript').isExecuted\n  ? $('Code in JavaScript').first().json.text\n  : $('Detect Message Type1').first().json.text || '';\n\nconst userName     = $('Detect Message Type1').first().json.sender_name || 'Customer';\nconst userPhone    = $('Detect Message Type1').first().json.phone || '';\nconst messageType  = $('Detect Message Type1').first().json.message_type || 'text';\nconst instanceName = $('Detect Message Type1').first().json.instance_name || 'cifral-v1';\n\n// --- Knowledge base ---\nconst businessInfoItems = $('Read Business Info1').all();\nconst productsItems     = $('Read Products1').all();\nconst faqsItems         = $('Read FAQs1').all();\n\nconst business = {};\nbusinessInfoItems.forEach(item => {\n  const d = item.json;\n  if (d.business_info && d.value) business[d.business_info] = d.value;\n});\n\nconst productList = productsItems\n  .filter(i => i.json.product_id)\n  .map(i => {\n    const p = i.json;\n    const available = p.available === 'SI' ? 'AVAILABLE' : 'NOT AVAILABLE';\n    const highlight = p.highlight ? ` [${p.highlight}]` : '';\n    return `- ${p.name} (${p.product_id}): ${p.description}\\n  Status: ${available}\\n  Category: ${p.category}${highlight}`;\n  })\n  .join('\\n\\n');\n\nconst faqList = faqsItems\n  .filter(i => i.json.question)\n  .map(i => `Q: ${i.json.question}\\nA: ${i.json.answer}\\nCategory: ${i.json.category}`)\n  .join('\\n\\n');\n\n// --- Extractor output ---\nconst extractor = $('Information Extractor1').first().json.output || {};\n\n// --- Existing customer context from the Google Sheets Leads lookup ---\nconst lead = $('Normalize Phone and Look Match1').first().json || {};\n\nconst outreach_context = {\n  is_outreach_lead: false,\n  is_known_lead: lead.is_known_lead === true,\n  lead_status: lead.lead_status || '',\n  bot_status: lead.bot_status || 'Active',\n  row_number: lead.row_number || null,\n  personalization_note: '',\n  pain_point: ''\n};\n\nreturn [{\n  json: {\n    context: {\n      business_name:        business.business_name || 'Your Business Name',\n      business_description: business.business_description || '',\n      phone:                business.phone || '',\n      email:                business.email || '',\n      hours:                business.hours || '',\n      coverage_area:        business.coverage_area || '',\n      website:              business.website || '',\n      booking_url:          business.booking_url || '',\n      response_tone:        business.response_tone || 'professional and friendly',\n      language:             business.language || 'same language as customer',\n      products:             productList || 'No products configured',\n      faqs:                 faqList || 'No FAQs configured'\n    },\n    user: {\n      name:               userName,\n      phone:              userPhone,\n      message:            userMessage,\n      message_type:       messageType,\n      instance_name:      instanceName,\n      intent:             extractor.intent || 'unknown',\n      product_mentioned:  extractor.product_mentioned || 'none',\n      reply_sentiment:    extractor.reply_sentiment || 'neutral',\n      urgency:            extractor.urgency || 'none',\n      needs_human:        extractor.needs_human || false,\n      outreach_context\n    }\n  }\n}];\n"
+      },
+      "id": "d70df937-35f7-41dd-b5c2-edae2b058e1e",
+      "name": "Build Context for AI Agent1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.user.message }}",
+        "options": {
+          "systemMessage": "=You are the virtual assistant for {{ $json.context.business_name }}. {{ $json.context.business_description }}\n\nABOUT THE BUSINESS:\n- Website: {{ $json.context.website || 'not provided' }}\n- Email: {{ $json.context.email }}\n- Hours: {{ $json.context.hours }}\n- Coverage area: {{ $json.context.coverage_area }}\n- Booking: {{ $json.context.booking_url || 'not provided' }}\n\nSERVICES (for your reference — never list all of them at once):\n{{ $json.context.products }}\n\nFREQUENTLY ASKED QUESTIONS:\n{{ $json.context.faqs }}\n\n---\n\nFORMATTING RULES — non-negotiable:\n- No markdown: no **bold**, no _italic_, no # headers\n- No em dashes (—). Use commas or periods instead\n- No bullet lists. Use plain sentences or line breaks\n- Never list all services at once with numbered descriptions\n- Short paragraphs. WhatsApp style, conversational\n- Maximum 2 emojis per message, only when natural\n\n---\n\nCONVERSATION RULES — non-negotiable:\n- One idea per message. One question per message. Never stack two questions\n- Never present all services at once. If someone asks what you do, describe the most relevant one for their context\n- If someone picks a service, describe only that service in 1-2 lines, then ask one question about their situation\n- Your goal is to understand their problem, not to present a catalog\n- Escalate to human if: they ask for a price, want to get started, ask something you cannot answer with certainty, or show clear buying intent\n\n---\n\nLANGUAGE:\nMatch the customer's language exactly. If they write in Spanish, respond in Spanish. If English, respond in English.\n\n---\n\nOUTREACH CONTEXT:\n{{ $json.user.outreach_context.is_outreach_lead ? 'This contact was previously reached via cold outreach. Use the context below to personalize your response. Do NOT introduce the business generically — they already know who we are.\\n\\nLead context: ' + $json.user.outreach_context.personalization_note + '\\nProblem identified: ' + $json.user.outreach_context.pain_point : 'This appears to be a new inbound contact with no prior outreach history. Introduce the business naturally if needed.' }}\n\nIf the person seems surprised to receive a message or asks how you got their number:\n- Acknowledge the outreach transparently (e.g. \"We found your business online and thought we could help\")\n- Never pretend the message was not cold outreach if asked directly\n\nIf reply_sentiment is \"negative\": acknowledge politely, wish them well, end the conversation. Never insist.\n\n---\n\nPRICING:\n- If the customer asks about the price of a product or service, use the PRODUCTS information provided in the context.\n- Never invent or guess a price.\n- If a specific price is available in the product information, give that price clearly.\n- If the price is not available in the product information, say that the price is not currently available and offer to help with the next step.\n- Do not redirect the customer to a generic pricing page unless a relevant URL is provided in the business information.\n---\n\nBOOKING:\nWhen someone wants to schedule, speak with someone, or get a recommendation:\nIf a booking link is shown in ABOUT THE BUSINESS above, offer it. If it says 'not provided', do not promise a link or invent one: offer to have the team contact them to arrange a time.\n\n---\n\nHANDOFF TO TEAM:\nRedirect warmly when:\n- They ask something complex not covered here\n- They express frustration or explicitly ask for a human\n- They want a custom quote or proposal\n\nWhen redirecting: tell them the team will follow up shortly and invite them to share their situation briefly.\n\n---\n\nVOICE NOTES:\nAcknowledge naturally at the start: \"Escuché tu mensaje...\" / \"Got your voice note...\"\n- Never output template syntax or raw placeholder text such as double curly braces. If a value is unknown, write a plain sentence instead",
+          "maxIterations": 3
+        }
+      },
+      "id": "b19be367-f734-4ea7-ae2d-43fe6bbc9dbf",
+      "name": "Generate Response1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        2080,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Detect Message Type1').first().json.phone }}",
+        "contextWindowLength": 6
+      },
+      "id": "b810fa1a-9d70-4ddc-92f4-2d9f35223985",
+      "name": "Conversation Memory1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        2208,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://YOUR_EVOLUTION_HOST:8080/message/sendText/{{ $('Detect Message Type1').first().json.instance_name }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "=YOUR_EVOLUTION_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Detect Message Type1').first().json.phone }}\",\n  \"text\": {{ JSON.stringify(\n    ($('Detect Message Type1').first().json.message_type === 'voice' ? '🎤 ' : '') + $json.output\n  ) }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "bbc7fb3e-d643-4ea4-9319-19783f3fe92b",
+      "name": "Send WhatsApp Reply (Evolution)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "position": [
+        2544,
+        512
+      ],
+      "onError": "continueErrorOutput",
+      "notes": "Evolution API endpoint:\nPOST /message/sendText/{instanceName}\nHeaders: apikey (no Bearer prefix — Evolution usa apikey directa)\nBody: { number, text }\n\nEl número puede ir con o sin @s.whatsapp.net — Evolution lo resuelve."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e003e428-5085-4f71-b70a-606253501730",
+              "name": "timestamp",
+              "value": "={{ $('Detect Message Type1').first().json.timestamp }}",
+              "type": "string"
+            },
+            {
+              "id": "97f8ebe6-e192-42f0-aa0c-03444bcd90cf",
+              "name": "channel",
+              "value": "whatsapp",
+              "type": "string"
+            },
+            {
+              "id": "566755df-0aea-4767-a88b-7ef01f195f55",
+              "name": "user_id",
+              "value": "={{ $('Detect Message Type1').first().json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "00a3bb5f-3efb-4631-b46d-adc0c3658ab4",
+              "name": "username",
+              "value": "={{ $('Detect Message Type1').first().json.sender_name }}",
+              "type": "string"
+            },
+            {
+              "id": "cae52f16-b421-4fde-82b3-4d2d9e885e24",
+              "name": "user_name",
+              "value": "={{ $('Detect Message Type1').first().json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "d13c463a-8dca-46f0-8bbd-87d9f65dd2e9",
+              "name": "message_type",
+              "value": "={{ $('Detect Message Type1').first().json.message_type }}",
+              "type": "string"
+            },
+            {
+              "id": "1e809dd1-0966-43ea-974b-2b66871ec0f0",
+              "name": "message",
+              "value": "={{ $('Build Context for AI Agent1').item.json.user.message }}",
+              "type": "string"
+            },
+            {
+              "id": "9b78a0f0-42f1-4fc9-b0e7-c2a04e51eab3",
+              "name": "intent",
+              "value": "={{ $('Information Extractor1').first().json.output.intent }}",
+              "type": "string"
+            },
+            {
+              "id": "cbd46f7e-87fb-4d64-a805-a640552e1739",
+              "name": "response",
+              "value": "={{ $json.send_accepted ? $('Generate Response1').item.json.output : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "21533a40-3e49-4796-80df-a1de9449aea4",
+              "name": "needs_human",
+              "value": "={{ String($('Information Extractor1').first().json.output.needs_human) }}",
+              "type": "string"
+            },
+            {
+              "id": "b1bd072a-f034-4f7c-9c87-9d2211815469",
+              "name": "delivery_state",
+              "value": "={{ $json.delivery_state }}",
+              "type": "string"
+            },
+            {
+              "id": "806a1acd-f574-4b68-ab48-e8bc0a89d527",
+              "name": "send_accepted",
+              "value": "={{ String($json.send_accepted) }}",
+              "type": "string"
+            },
+            {
+              "id": "12d784e6-5ce4-432d-94fe-12be36f032a5",
+              "name": "delivery_confirmed",
+              "value": "={{ String($json.delivery_confirmed) }}",
+              "type": "string"
+            },
+            {
+              "id": "9d394dd9-f98d-4d61-9e53-45cc1728aefc",
+              "name": "provider_message_id",
+              "value": "={{ $json.provider_message_id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "7264ad5f-ba2b-4263-92c3-8ec59710bb71",
+              "name": "delivery_detail",
+              "value": "={{ $json.delivery_detail }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b4ded044-290b-42b2-988d-8f61bf04e824",
+      "name": "Format for Log1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3136,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "REPLACE_WITH_YOUR_VALUE",
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Conversation_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=1219984217",
+          "mode": "list",
+          "value": 1219984217
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.timestamp }}",
+            "channel": "={{ $json.channel }}",
+            "user_id": "={{ $json.user_id }}",
+            "username": "={{ $json.username }}",
+            "user_name": "={{ $json.user_name }}",
+            "message_type": "={{ $json.message_type }}",
+            "message": "={{ $json.message }}",
+            "response": "={{ $json.response }}",
+            "intent": "={{ $json.intent }}",
+            "needs_human": "={{ $json.needs_human }}",
+            "delivery_state": "={{ $json.delivery_state }}",
+            "send_accepted": "={{ $json.send_accepted }}",
+            "delivery_confirmed": "={{ $json.delivery_confirmed }}",
+            "provider_message_id": "={{ $json.provider_message_id }}",
+            "delivery_detail": "={{ $json.delivery_detail }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "timestamp",
+              "id": "timestamp",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user_id",
+              "id": "user_id",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "username",
+              "id": "username",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user_name",
+              "id": "user_name",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "message_type",
+              "id": "message_type",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "message",
+              "id": "message",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "response",
+              "id": "response",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "intent",
+              "id": "intent",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "needs_human",
+              "id": "needs_human",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "delivery_state",
+              "id": "delivery_state",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "send_accepted",
+              "id": "send_accepted",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "delivery_confirmed",
+              "id": "delivery_confirmed",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "provider_message_id",
+              "id": "provider_message_id",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "delivery_detail",
+              "id": "delivery_detail",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "80345483-33ff-4a69-bec9-28dd884b47c7",
+      "name": "Log Conversation1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3312,
+        512
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "human-check",
+              "leftValue": "={{ $json.needs_human }}",
+              "operator": {
+                "operation": "equals",
+                "type": "string"
+              },
+              "rightValue": "true"
+            },
+            {
+              "id": "delivery-check",
+              "leftValue": "={{ $json.delivery_state }}",
+              "operator": {
+                "operation": "notEquals",
+                "type": "string"
+              },
+              "rightValue": "accepted"
+            }
+          ],
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      },
+      "id": "987d9665-f901-4d21-bac0-98946353ed89",
+      "name": "Alert Owner?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3504,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "REPLACE_WITH_YOUR_VALUE",
+        "text": "=\n\n={{ 'WhatsApp - Customer needs attention\\nName: ' + String($json.username ?? '') + '\\nPhone: ' + String($json.user_id ?? '') + '\\nType: ' + String($json.message_type ?? '') + '\\nIntent: ' + String($json.intent ?? '').replace(/_/g, ' ') + '\\n\\nMessage:\\n' + String($json.message ?? '').replace(/_/g, ' ') + '\\n\\nBOT RESPONSE:\\n' + String($json.response ?? '').replace(/_/g, ' ') }}\n\n",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a8d6de57-6ecb-46ef-b467-b6501f58ee16",
+      "name": "Alert Owner (Telegram)1",
+      "webhookId": "f8907b73-42fb-4f68-9ffd-4c3f902d7ebe",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "position": [
+        3712,
+        448
+      ],
+      "notes": "Get your Chat ID by sending a message to @userinfobot on Telegram.\nSet it directly in this node or use an n8n environment variable."
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "id": "45524d2e-7223-4e91-a53a-e9685499b3d4",
+      "name": "Wait1",
+      "webhookId": "7ead1869-c500-4691-a1d5-6783d0198545",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1904,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Strip markdown formatting from AI response\nlet text = $input.item.json.output || '';\n\n// Remove bold/italic\ntext = text.replace(/\\*\\*(.*?)\\*\\*/g, '$1');\ntext = text.replace(/\\*(.*?)\\*/g, '$1');\ntext = text.replace(/_(.*?)_/g, '$1');\n\n// Replace em dashes with comma\ntext = text.replace(/ — /g, ', ');\ntext = text.replace(/—/g, ', ');\n\n// Remove markdown headers\ntext = text.replace(/^#{1,3}\\s+/gm, '');\n\n// Clean up extra blank lines (max 1)\ntext = text.replace(/\\n{3,}/g, '\\n\\n');\n\n// P5: carry a stable dedup key (the HTTP node replaces the item downstream).\n// P5: preserve the key created by Dedup Check1.\nconst claim = $('Dedup Check1').first().json;\nconst key = claim.dedup_key;\n\nif (!key || claim.dedup_status !== 'processing' || claim.is_duplicate === true) {\n  throw new Error('Dedup claim missing, duplicate, or not processing; refusing to send.');\n}\n\nreturn { json: { ...$input.item.json, output: text.trim(), dedup_key: key } };\n"
+      },
+      "id": "46477052-91dc-41b6-8e28-22fd0a7bc17b",
+      "name": "Format Cleaner1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2384,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "59df61c1-eed2-452c-bbdb-ee44dcfe22d4",
+              "leftValue": "={{ $json.skip }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            },
+            {
+              "id": "f26cad4c-ca7f-478b-8f0d-23b6b2844db5",
+              "leftValue": "={{ $json.message_type !== 'voice' && !$json.text }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            },
+            {
+              "id": "dedup-check",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            },
+            {
+              "id": "dedup-unverifiable",
+              "leftValue": "={{ $json.dedup_status === 'unverifiable' }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      },
+      "id": "90633e01-2d48-48b4-ae40-2bda69e9c422",
+      "name": "Skip Event1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1520,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'ok' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f13dc6e1-0b91-4346-a4e7-b01c51308ae7",
+      "name": "Respond 1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4560,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "63f5d6c9-d9bd-417a-8c6c-669dfe172776",
+              "leftValue": "={{ $('Normalize Phone and Look Match1').first().json.matched }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": "={{ $json.matched }}"
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      },
+      "id": "1d956c90-f6e0-42b9-baea-2c573998e97a",
+      "name": "Phone Match1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4112,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "inputText": "={{ $json.text }}",
+        "options": {
+          "categories": "Automatic reply, Human message",
+          "enableAutoFixing": true
+        }
+      },
+      "id": "269e67c2-69c8-4dbf-ad21-311b675600ba",
+      "name": "Sentiment Analysis1",
+      "type": "@n8n/n8n-nodes-langchain.sentimentAnalysis",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "80a59ea4-0d28-4d54-a57f-9094f7b3dbc4",
+              "leftValue": "={{ $json.bot_status }}",
+              "operator": {
+                "operation": "notEquals",
+                "type": "string"
+              },
+              "rightValue": "Paused"
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      },
+      "id": "cb472728-59fe-43c4-8f0a-5d01e1d1311c",
+      "name": "Bot Status1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        560,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NORMALIZE AND LOOK MATCH - Get Lead Early\n// Input: Google Sheets row(s) from \"Get row(s) in sheet\" (sheet: Leads)\n// Columns: phone, name, status, language, source,\n//          intent, last_message, last_contact, bot_status, row_number\n// NOTE: \"Get row(s) in sheet\" has alwaysOutputData=true, so when no lead\n//       matches, the input arrives as a single empty object: [{}]\n// ============================================\n\nconst webhookPhone = $('Detect Message Type1').first().json.phone;\nconst leadRows     = $input.all();\n\nconst messageData = {\n  phone:         $('Detect Message Type1').first().json.phone,\n  sender_name:   $('Detect Message Type1').first().json.sender_name,\n  message_type:  $('Detect Message Type1').first().json.message_type,\n  instance_name: $('Detect Message Type1').first().json.instance_name,\n  text: $('Sentiment Analysis1').first().json.text\n        || $('Detect Message Type1').first().json.text\n        || ''\n};\n\nconst normalize = (p) => {\n  let n = String(p || '').replace(/[^0-9]/g, '');\n  // Add country-specific phone normalization here if needed\n  return n;\n};\n\nconst normalizedWebhook = normalize(webhookPhone);\n\n// Only compare real phone numbers. This also prevents the empty [{}] row from\n// matching when both sides normalize to an empty string.\nconst match = normalizedWebhook.length >= 10\n  ? leadRows.find(item => {\n      const rowPhone = normalize(item.json.phone || '');\n      return rowPhone.length >= 10 && rowPhone === normalizedWebhook;\n    })\n  : undefined;\n\nif (match) {\n  return [{\n    json: {\n      ...messageData,\n      is_known_lead: true,\n      matched:       true,\n      page_id:       '',\n      bot_status:    match.json.bot_status || 'Active',\n      lead_status:   match.json.status || '',\n      row_number:    match.json.row_number || null\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...messageData,\n    is_known_lead: false,\n    matched:       false,\n    page_id:       '',\n    bot_status:    'Active'\n  }\n}];\n"
+      },
+      "id": "210663db-1f31-43a2-bc07-78dc77fa86b4",
+      "name": "Normalize Phone and Look Match1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'ok', reason: $('Detect Message Type1').item.json.reason } }}",
+        "options": {}
+      },
+      "id": "426979c3-49ca-4cfc-9dfe-1b0d199970dd",
+      "name": "Respond OK (skip)4",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        160,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'ok', reason: $('Detect Message Type1').item.json.reason } }}",
+        "options": {}
+      },
+      "id": "41b69d98-a4c3-46a4-a7fe-0b63863a97e1",
+      "name": "Respond OK (skip)5",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        784,
+        816
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "bf9c210f-2adc-483d-8a6a-2f68cf0cd8ea",
+      "name": "No Operation, do nothing3",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        816
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ebee8048-adfa-4fc1-829f-ffc3e5acf676",
+      "name": "No Operation, do nothing4",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        304
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "017ade13-e227-4a76-a369-5a42d4b5bc5a",
+      "name": "No Operation, do nothing5",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        368,
+        512
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "31420eb8-8221-4a33-a4d4-43079c9e6db1",
+      "name": "When clicking ‘Execute workflow’",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        32,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "REPLACE_WITH_YOUR_VALUE",
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=1813096202",
+          "mode": "list",
+          "value": 1813096202
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "phone",
+              "lookupValue": "={{ $json.phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c559ed09-cd78-41ac-af54-2d7084ca2962",
+      "name": "Get row(s) in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        176,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "model": "deepseek-flash",
+        "options": {}
+      },
+      "id": "4c3abdf0-3036-487a-8cf4-ff81cde97e3c",
+      "name": "DeepSeek Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "model": "deepseek-flash",
+        "options": {}
+      },
+      "id": "529e4c1f-78d6-44e9-9d49-6c1ef37dd56f",
+      "name": "DeepSeek Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        768,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "model": "deepseek-flash",
+        "options": {
+          "maxTokens": 400
+        }
+      },
+      "id": "be12cc56-2080-4491-a014-e721a7436e0f",
+      "name": "DeepSeek Chat Model2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "REPLACE_WITH_YOUR_VALUE",
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=1813096202",
+          "mode": "list",
+          "value": 1813096202
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "phone",
+              "lookupValue": "={{ $('Detect Message Type1').first().json.phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b18b1b6f-cfb7-4003-b758-36c058e4c623",
+      "name": "Get row(s) in sheet1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        3904,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "REPLACE_WITH_YOUR_VALUE",
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=1813096202",
+          "mode": "list",
+          "value": 1813096202
+        },
+        "columns": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "phone"
+          ],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "phone",
+              "id": "phone",
+              "removed": false,
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "name",
+              "id": "name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "status",
+              "id": "status",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "language",
+              "id": "language",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "source",
+              "id": "source",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "intent",
+              "id": "intent",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "last_message",
+              "id": "last_message",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "last_contact",
+              "id": "last_contact",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "bot_status",
+              "id": "bot_status",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "row_number",
+              "id": "row_number",
+              "readOnly": true,
+              "removed": true,
+              "required": false,
+              "type": "number"
+            }
+          ],
+          "value": {
+            "bot_status": "={{ String(($('Information Extractor1').first().json.output || {}).needs_human).toLowerCase() === 'true' ? 'Paused' : ($('Normalize Phone and Look Match1').first().json.bot_status || 'Active') }}",
+            "intent": "={{ $('Information Extractor1').first().json.output.intent || '' }}",
+            "language": "={{ $('Information Extractor1').first().json.output.language || '' }}",
+            "last_contact": "={{ $now }}",
+            "last_message": "={{ $('Normalize Phone and Look Match1').first().json.text || '' }}",
+            "name": "={{ $json.name || $('Detect Message Type1').first().json.sender_name || '' }}",
+            "phone": "={{ $('Detect Message Type1').first().json.phone }}",
+            "source": "WhatsApp",
+            "status": "={{ $('Information Extractor1').first().json.output.reply_sentiment || '' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "be83f63c-46d4-4dd0-86f3-db423db8cc98",
+      "name": "Update row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        4304,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "REPLACE_WITH_YOUR_VALUE",
+        "sheetName": {
+          "__rl": true,
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit#gid=1813096202",
+          "mode": "list",
+          "value": 1813096202
+        },
+        "columns": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "phone",
+              "id": "phone",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "name",
+              "id": "name",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "status",
+              "id": "status",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "language",
+              "id": "language",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "source",
+              "id": "source",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "intent",
+              "id": "intent",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "last_message",
+              "id": "last_message",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "last_contact",
+              "id": "last_contact",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "bot_status",
+              "id": "bot_status",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "bot_status": "={{ String(($('Information Extractor1').first().json.output || {}).needs_human).toLowerCase() === 'true' ? 'Paused' : 'Active' }}",
+            "intent": "={{ $('Information Extractor1').first().json.output.intent || '' }}",
+            "language": "={{ $('Information Extractor1').first().json.output.language || '' }}",
+            "last_contact": "={{ $now }}",
+            "last_message": "={{ $('Normalize Phone and Look Match1').first().json.text || '' }}",
+            "name": "={{ $('Detect Message Type1').first().json.sender_name || 'Customer' }}",
+            "phone": "={{ $('Detect Message Type1').first().json.phone }}",
+            "source": "WhatsApp",
+            "status": "={{ $('Information Extractor1').first().json.output.reply_sentiment || '' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "c1f2a77c-4de4-4337-baac-5bca4e825975",
+      "name": "Append row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "retryOnFail": false,
+      "position": [
+        4304,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n // ============================================================================\n // P1 - classify the REAL Evolution / Meta outcome.\n // HTTP 2xx alone is NOT acceptance:\n // 201 + body.key.id -> accepted\n // provider error fields -> failed\n // output 1 (json.error) -> failed\n // no response captured -> unknown\n // node not executed -> not_attempted\n // Delivery to the handset is NOT provable here.\n // No MESSAGES_UPDATE webhook is subscribed, so delivery_confirmed is false.\n // ============================================================================\n\nconst SEND = 'Send WhatsApp Reply (Evolution)1';\nconst STATUSES = ['PENDING', 'SERVER_ACK', 'DELIVERY_ACK', 'READ', 'PLAYED'];\n\n// Fields for the log come from Format Cleaner1; HTTP replaces the item.\nlet src = {};\ntry {\n  src = $('Format Cleaner1').item.json;\n} catch (e) {\n  try {\n    src = $('Format Cleaner1').first().json;\n  } catch (e2) {\n    src = {};\n  }\n}\n\nlet delivery_state = 'unknown';\nlet delivery_detail = '';\nlet provider_message_id = null;\nlet accepted = false;\n\nlet executed = false;\ntry {\n  executed = $(SEND).isExecuted === true;\n} catch (e) {\n  executed = false;\n}\n\nif (!executed) {\n  delivery_state = 'not_attempted';\n  delivery_detail = 'send node not executed (no attempt made)';\n} else {\n  try {\n    const j = $json || {};\n    const err = j.error;\n    const code = Number(j.statusCode || 0);\n    const rawBody = j.body;\n\n    const body =\n      rawBody &&\n      typeof rawBody === 'object' &&\n      !Array.isArray(rawBody)\n        ? rawBody\n        : null;\n\n    const hasKey = !!(\n      body &&\n      body.key &&\n      typeof body.key.id === 'string' &&\n      body.key.id.length > 0\n    );\n\n    // Do not treat body.message as an error:\n    // Evolution uses it to return the sent message content.\n    const providerErr = !!(\n      body &&\n      (body.error_data || body.error)\n    );\n\n    if (err !== undefined && err !== null) {\n      delivery_state = 'failed';\n\n      const m =\n        (err &&\n          (err.message || (err.error && err.error.message))) ||\n        String(err);\n\n      delivery_detail =\n        'http ' + (code || 'n/a') + ': ' + String(m).slice(0, 300);\n\n    } else if (code === 0 && !hasKey && !providerErr) {\n      delivery_state = 'unknown';\n      delivery_detail = 'no HTTP response captured (timeout/reset)';\n\n    } else if (providerErr) {\n      delivery_state = 'failed';\n\n      const providerError =\n        body.error_data || body.error;\n\n      const errorText =\n        typeof providerError === 'string'\n          ? providerError\n          : JSON.stringify(providerError);\n\n      delivery_detail =\n        'provider error inside HTTP ' +\n        code +\n        ': ' +\n        String(errorText || '').slice(0, 300);\n\n    } else if (hasKey) {\n      accepted = true;\n      delivery_state = 'accepted';\n      provider_message_id = body.key.id;\n\n      const st = String(body.status || '');\n\n      delivery_detail =\n        STATUSES.indexOf(st) >= 0\n          ? 'provider accepted; provider status=' + st\n          : 'provider accepted; unrecognised provider status=' +\n            (st || '(none)');\n\n    } else {\n      delivery_state = 'unknown';\n      delivery_detail = 'http ' + code + ' with unrecognised body';\n    }\n  } catch (e) {\n    delivery_state = 'unknown';\n    delivery_detail =\n      'classification error: ' + String((e && e.message) || e);\n  }\n}\n\nconst out = Object.assign({}, src, {\n  delivery_state: delivery_state,\n  delivery_detail: delivery_detail,\n  send_accepted: accepted,\n  delivery_confirmed: false,\n  provider_message_id: provider_message_id,\n});\n\nreturn { json: out };\n"
+      },
+      "id": "0455f512-b3f3-4d0b-9f06-e105ae74b79b",
+      "name": "Delivery Status1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2768,
+        528
+      ],
+      "notes": "P1: classifies the real Evolution/Meta send outcome. HTTP 201 alone is NOT acceptance."
+    },
+    {
+      "parameters": {
+        "jsCode": "// P5 - atomic inbound deduplication.\n// A real SQLite table with message_id PRIMARY KEY on the persistent n8n volume.\n// The uniqueness check and the row write are ONE indivisible operation, so two\n// concurrent executions can never both claim the same message id.\n// $getWorkflowStaticData is deliberately NOT used: it is a read-at-start /\n// write-at-end whole-object snapshot and was measured to double-claim 10/10.\n// ============================================================================\nconst { DatabaseSync } = require('node:sqlite');\n\nconst DB_PATH = '/home/node/.n8n/project04_dedup.sqlite';\nconst TTL_MS = 15 * 60 * 1000;\n\nconst db = new DatabaseSync(DB_PATH);\n// busy_timeout FIRST: without it a concurrent opener fails at the WAL switch with\n// \"database is locked\" before any retry budget exists.\ndb.exec('PRAGMA busy_timeout=10000');\ntry { db.exec('PRAGMA journal_mode=WAL'); } catch (e) { /* best effort; correctness does not depend on it */ }\ndb.exec('CREATE TABLE IF NOT EXISTS dedup (' +\n  'message_id TEXT PRIMARY KEY, status TEXT NOT NULL, ts INTEGER NOT NULL)');\n\nconst now = Date.now();\nconst out = [];\ntry {\n  for (const item of $input.all()) {\n    const j = item.json || {};\n\n    // Events the workflow already skips are never claimed.\n    if (j.skip === true) {\n      out.push({ json: Object.assign({}, j, { dedup_status: 'skipped', is_duplicate: false }) });\n      continue;\n    }\n\n    // Stable id from the inbound payload. Date.now() is NEVER used as an id.\n    let key = (j.message_id && String(j.message_id).trim()) ? String(j.message_id).trim() : null;\n\n    if (!key) {\n      // Fail closed when the provider did not supply a stable message id.\n      // Voice payloads have no stable text fingerprint here; never derive a key\n      // from timestamp alone or treat two distinct audio messages as duplicates.\n      // Text may use a deterministic surrogate only when provider timestamp and\n      // non-empty text are both present. Otherwise stop before AI/send nodes.\n      if (j.message_type === 'voice') {\n        out.push({ json: Object.assign({}, j, { dedup_status: 'unverifiable', is_duplicate: false }) });\n        continue;\n      }\n      if (j.timestamp && String(j.text || '').trim()) {\n        const tuple = [j.instance_name || '', j.phone || '', j.raw_type || '',\n                       String(j.timestamp), String(j.text).slice(0, 400)];\n        key = 'derived:' + JSON.stringify(tuple);\n      } else {\n        // No trustworthy key: no claim, no guarantee, and no auto-send.\n        out.push({ json: Object.assign({}, j, { dedup_status: 'unverifiable', is_duplicate: false }) });\n        continue;\n      }\n    }\n\n    let claimed = false;\n    // Bounded retry: under a webhook burst a writer can still meet SQLITE_BUSY momentarily.\n    // Retrying the same atomic claim is safe - the PRIMARY KEY decides, so a retry can only\n    // ever turn a failure into a correct answer, never into a double-claim.\n    let attempt = 0;\n    for (;;) {\n      try {\n        db.exec('BEGIN IMMEDIATE');\n        try {\n          // TTL policy: terminal outcomes accepted/failed are retained for 15 minutes,\n          // then eligible for a fresh claim. 'unknown' is deliberately NOT auto-expired:\n          // the provider may have accepted a send even when n8n lost the response, so\n          // retrying that inbound event could send a duplicate to the customer.\n          db.prepare(            \"DELETE FROM dedup WHERE status IN ('accepted', 'failed') AND ts < ?\"\n          ).run(now - TTL_MS);\n\n          const row = db.prepare('SELECT status, ts FROM dedup WHERE message_id = ?').get(key);\n          if (row) {\n            // A crashed/slow attempt with no terminal result is made unknown and remains\n            // blocked. This is fail-closed: expiry alone cannot prove no reply was sent.\n            if (row.status === 'processing' && (now - row.ts) > TTL_MS) {\n              db.prepare('UPDATE dedup SET status = ?, ts = ? WHERE message_id = ?')\n                .run('unknown', now, key);\n            }\n            claimed = false;\n          } else {\n            db.prepare('INSERT INTO dedup (message_id, status, ts) VALUES (?, ?, ?)')\n              .run(key, 'processing', now);\n            claimed = true;\n          }\n          db.exec('COMMIT');\n        } catch (e) {\n          try { db.exec('ROLLBACK'); } catch (e2) { /* already rolled back */ }\n          throw e;\n        }\n        break;\n      } catch (e) {\n        const msg = String((e && e.message) || e);\n        if (/locked|busy/i.test(msg) && attempt < 8) {\n          attempt++;\n          // small blocking pause; no timers, so the sandbox cannot be left with pending handles\n          const until = Date.now() + (20 * attempt);\n          while (Date.now() < until) { /* spin briefly */ }\n          continue;\n        }\n        throw e;\n      }\n    }\n\n    out.push({\n      json: Object.assign({}, j, {\n        dedup_key: key,\n        is_duplicate: !claimed,\n        dedup_status: claimed ? 'processing' : 'duplicate',\n      }),\n    });\n  }\n} finally {\n  db.close();\n}\nreturn out;"
+      },
+      "id": "613c2064-576e-4e9b-a23a-54b94652de34",
+      "name": "Dedup Check1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1712,
+        480
+      ],
+      "notes": "P5: atomic SQLite claim on persistent n8n volume. TTL 15m expires terminal accepted/failed rows; stale processing becomes unknown and stays blocked to avoid duplicate sends."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================================================\n// P5 - record the terminal delivery state for this message id.\nconst { DatabaseSync } = require('node:sqlite');\n\nconst db = new DatabaseSync('/home/node/.n8n/project04_dedup.sqlite');\ndb.exec('PRAGMA busy_timeout=10000');\n\nconst j = $json || {};\nconst key = j.dedup_key;\nlet dedup_recorded = 'n/a';\n\ntry {\n  if (key) {\n    const st = j.delivery_state;\n    const terminal =\n      st === 'accepted' ? 'accepted' :\n      st === 'failed' ? 'failed' :\n      'unknown';\n\n    const result = db.prepare(\n      'UPDATE dedup SET status = ?, ts = ? WHERE message_id = ?'\n    ).run(terminal, Date.now(), key);\n\n    dedup_recorded =\n      Number(result.changes) === 1\n        ? terminal\n        : 'write_failed_no_matching_row';\n  }\n} finally {\n  db.close();\n}\n\nreturn {\n  json: Object.assign({}, j, {\n    dedup_recorded: dedup_recorded\n  })\n};"
+      },
+      "id": "09243c8b-1d7c-4cb8-9085-b608e0976492",
+      "name": "Dedup Finalize1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2960,
+        528
+      ],
+      "notes": "P5: writes the terminal delivery state (accepted/failed/unknown) for this message id."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_EVOLUTION_HOST:8080/chat/getBase64FromMediaMessage/project4-test",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_EVOLUTION_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": {\n    \"key\": {\n      \"remoteJid\": \"{{ $('Detect Message Type1').item.json.message_key.remoteJid }}\",\n      \"fromMe\": false,\n      \"id\": \"{{ $('Detect Message Type1').item.json.message_id }}\"\n    }\n  },\n  \"convertToMp4\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -1152,
+        512
+      ],
+      "id": "02130b32-64a5-4458-8e65-fc3391caadd0",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_WHISPER_HOST:9000/v1/audio/transcriptions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_WHISPER_API_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -736,
+        512
+      ],
+      "id": "de99598f-d180-4faa-8562-3b4992e33910",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst original = $('Prepare Audio Binary1').item.json;\nconst response = $input.item.json;\n\nconst transcript = response.text;\n\nif (typeof transcript !== 'string' || !transcript.trim()) {\n  throw new Error(\n    'Whisper did not return a non-empty transcription in response.text'\n  );\n}\n\nreturn {\n  json: {\n    ...original,\n    text: transcript,\n    transcription: transcript,\n  },\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        512
+      ],
+      "id": "80039892-af0a-42dc-9ef1-ebf2fb28abda",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "connections": {
+    "Alert Owner (Telegram)1": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Owner?1": {
+      "main": [
+        [
+          {
+            "node": "Alert Owner (Telegram)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bot Status1": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK (skip)5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context for AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Generate Response1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Check1": {
+      "main": [
+        [
+          {
+            "node": "Skip Event1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Finalize1": {
+      "main": [
+        [
+          {
+            "node": "Format for Log1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Sentiment Analysis1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Response1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivery Status1": {
+      "main": [
+        [
+          {
+            "node": "Dedup Finalize1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Message Type1": {
+      "main": [
+        [
+          {
+            "node": "Dedup Check1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evolution Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Detect Message Type1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Cleaner1": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reply (Evolution)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Log1": {
+      "main": [
+        [
+          {
+            "node": "Alert Owner?1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Conversation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Response1": {
+      "main": [
+        [
+          {
+            "node": "Format Cleaner1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Normalize Phone and Look Match1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Phone Match1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor1": {
+      "main": [
+        [
+          {
+            "node": "Read Business Info1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Voice?1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sentiment Analysis1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Phone and Look Match1": {
+      "main": [
+        [
+          {
+            "node": "Bot Status1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Phone Match1": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Audio Binary1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Business Info1": {
+      "main": [
+        [
+          {
+            "node": "Read Products1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read FAQs1": {
+      "main": [
+        [
+          {
+            "node": "Build Context for AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Products1": {
+      "main": [
+        [
+          {
+            "node": "Read FAQs1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond OK (skip)3": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond OK (skip)4": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond OK (skip)5": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Reply (Evolution)1": {
+      "main": [
+        [
+          {
+            "node": "Delivery Status1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delivery Status1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sentiment Analysis1": {
+      "main": [
+        [
+          {
+            "node": "Respond OK (skip)4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Event1": {
+      "main": [
+        [
+          {
+            "node": "Respond OK (skip)3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Voice?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe Audio1": {
+      "main": [
+        []
+      ]
+    },
+    "Update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Generate Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Audio Binary1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Sentiment Analysis1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}

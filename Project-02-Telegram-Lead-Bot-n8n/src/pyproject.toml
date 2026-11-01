@@ -1,0 +1,47 @@
+# Метаданные проекта и конфигурация инструментов.
+# Единый источник истины по зависимостям; requirements.txt — зеркало для быстрой установки.
+
+[project]
+name = "telegram-lead-bot-n8n"
+version = "0.1.0"
+description = "Telegram-бот для сбора лидов с автоматизацией в n8n"
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    # --- Telegram-бот ---
+    "aiogram>=3.13,<4.0",
+    # --- HTTP-слой (webhook приёмника от n8n / health / админ-эндпоинты) ---
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.30,<1.0",
+    # --- Интеграции и конфигурация ---
+    "httpx>=0.27,<1.0",
+    "pydantic>=2.7,<3.0",
+    "pydantic-settings>=2.3,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-asyncio>=0.23,<1.0",
+    "ruff>=0.6,<1.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

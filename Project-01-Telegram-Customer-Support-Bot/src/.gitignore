@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+
+# Databases
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Local working copies
+bot.py.v1_working
+bot.py.v2_working
+bot.db.v1_working
+bot.db.v2_working
+
+# IDE / editors
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

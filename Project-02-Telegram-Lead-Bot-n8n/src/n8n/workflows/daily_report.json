@@ -1,0 +1,147 @@
+{
+  "name": "Daily Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "5e6f7081-0005-4000-8000-000000000001",
+      "name": "Schedule: ежедневно 20:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.LEAD_API_URL }}/stats/daily",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Admin-Token",
+              "value": "={{ $env.ADMIN_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5e6f7081-0005-4000-8000-000000000002",
+      "name": "HTTP: получить статистику за сутки",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Текст отчёта формируется из ответа GET /stats/daily.\nconst s = $json;\nconst successRate = (s.success_rate * 100).toFixed(0);\n\nreturn [{\n  json: {\n    ...s,\n    text:\n      `Отчёт за ${s.day}\\n` +\n      `Всего лидов: ${s.total}\\n` +\n      `Отправлено: ${s.sent}\\n` +\n      `Не передано (failed): ${s.failed}\\n` +\n      `В обработке (new): ${s.new}\\n` +\n      `Доля успешных: ${successRate}%`,\n  },\n}];"
+      },
+      "id": "5e6f7081-0005-4000-8000-000000000003",
+      "name": "Code: собрать отчёт",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "REPLACE_WITH_YOUR_VALUE",
+        "text": "={{ $json.text }}",
+        "additionalFields": {}
+      },
+      "id": "5e6f7081-0005-4000-8000-000000000004",
+      "name": "Telegram: отчёт менеджеру",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5e6f7081-0005-4000-8000-000000000005",
+      "name": "NoOp: другой канал уведомления (e-mail/Slack)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        260,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Daily Report (этап MVP)\n\n**Триггер:** cron `0 20 * * *` (ежедневно 20:00).\n**Вход:** `GET {{$env.LEAD_API_URL}}/stats/daily` — суточная сводка из SQLite.\n**Выход:** сообщение в Telegram (`TELEGRAM_ADMIN_CHAT_ID`).\n\n### Минимум отчёта\n`total`, `sent`, `failed`, `new`, доля успешных. Плюс `other` — защита от неизвестных статусов.\n\n### Другой канал\n«NoOp: другой канал…» — место для e-mail/Slack/Sheets. Текст уже готов (`$json.text`), достаточно добавить узел и соединить.\n\nЛогика подсчёта — в `app/services/reporting.py` (там же тесты).\n\nСекретов в файле нет: `$env.LEAD_API_URL`, `$env.ADMIN_API_TOKEN`, `$env.TELEGRAM_ADMIN_CHAT_ID`.",
+        "height": 480,
+        "width": 560,
+        "color": 7
+      },
+      "id": "5e6f7081-0005-4000-8000-000000000006",
+      "name": "Sticky Note: контракт отчёта",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule: ежедневно 20:00": {
+      "main": [
+        [
+          {
+            "node": "HTTP: получить статистику за сутки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: получить статистику за сутки": {
+      "main": [
+        [
+          {
+            "node": "Code: собрать отчёт",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: собрать отчёт": {
+      "main": [
+        [
+          {
+            "node": "Telegram: отчёт менеджеру",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "NoOp: другой канал уведомления (e-mail/Slack)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
