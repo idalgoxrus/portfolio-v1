@@ -44,6 +44,10 @@ Python · aiogram 3 · SQLite · n8n · Google Sheets API · Telegram Bot API ·
 
 **Рабочий завершённый портфолио-проект.** Основной сценарий сбора заявки, передачи в n8n, обработки, маршрутизации, уведомления и записи в CRM проверен.
 
+### Демонстрация / Demo Video
+
+[▶ Смотреть демонстрацию проекта / Watch project demo](Project02_Telegram_Lead_Bot_n8n_FINAL.mp4)
+
 ### Скриншоты
 
 - [Форма сбора заявки](screenshots/01_Telegram_Lead_Form.jpg)
